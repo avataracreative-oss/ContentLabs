@@ -1,0 +1,5 @@
+{
+  "name": "ContentLabs by AvataraLabs",
+  "description": "An AI-powered commercial video generator that transforms product URLs into professional marketing assets using Gemini, Nano Banana Pro, and Veo.",
+  "requestFramePermissions": []
+}
