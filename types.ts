@@ -55,7 +55,7 @@ export interface GeneratedVideo {
 export type Language = 'id' | 'en';
 
 // Dashboard & Navigation Types
-export type AppRoute = 'landing' | 'dashboard' | 'gallery' | 'profile' | 'tool:link-to-video';
+export type AppRoute = 'landing' | 'dashboard' | 'gallery' | 'profile' | 'tool:link-to-video' | 'tool:pixel-product-image' | 'tool:pixel-product-model';
 
 export interface Tool {
   id: string;

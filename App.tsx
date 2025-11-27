@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useGoogleLogin } from '@react-oauth/google'; // Real Google Hook
 import { Step, ProductData, GeneratedModel, GeneratedVideo, Language, SavedProject, GeneratedScript, AppRoute, LabCategory, Tool, GalleryItem } from './types';
@@ -11,7 +12,8 @@ import {
   modifyScript,
   generateAudio, 
   generateVeoVideo,
-  getAudioDuration
+  getAudioDuration,
+  generatePixelBatch
 } from './services/geminiService';
 import { backendApi } from './services/apiClient'; // Import backend API
 
@@ -55,6 +57,7 @@ const TRANSLATIONS = {
     next_editor: "Editor",
     editor_title: "Final Compose",
     bgm_upload: "Background Music",
+    bgm_select: "Pilih Musik",
     bgm_vol: "Volume",
     bgm_start: "Mulai (detik)",
     render_preview: "Render Video",
@@ -68,7 +71,8 @@ const TRANSLATIONS = {
     older: "Lebih Lama",
     preview_audio: "Preview Audio",
     stop_preview: "Stop Preview",
-    back_dashboard: "Kembali ke Dashboard"
+    back_dashboard: "Kembali ke Dashboard",
+    or_upload: "atau Upload File Sendiri"
   },
   en: {
     title: "ContentLabs",
@@ -108,6 +112,7 @@ const TRANSLATIONS = {
     next_editor: "Editor",
     editor_title: "Final Compose",
     bgm_upload: "Background Music",
+    bgm_select: "Select Music",
     bgm_vol: "Volume",
     bgm_start: "Start (sec)",
     render_preview: "Render Video",
@@ -121,9 +126,44 @@ const TRANSLATIONS = {
     older: "Older",
     preview_audio: "Preview Audio",
     stop_preview: "Stop Preview",
-    back_dashboard: "Back to Dashboard"
+    back_dashboard: "Back to Dashboard",
+    or_upload: "or Upload Your Own"
   }
 };
+
+// --- STOCK MUSIC DATA ---
+const STOCK_MUSIC = [
+  {
+    id: 'stock1',
+    title: 'Upbeat Corporate',
+    genre: 'Business',
+    duration: '2:15',
+    url: 'https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3',
+    icon: (
+      <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+    )
+  },
+  {
+    id: 'stock2',
+    title: 'Chill Lo-Fi',
+    genre: 'Lifestyle',
+    duration: '1:45',
+    url: 'https://assets.mixkit.co/music/preview/mixkit-driving-ambition-32.mp3',
+    icon: (
+      <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+    )
+  },
+  {
+    id: 'stock3',
+    title: 'Cinematic Ambient',
+    genre: 'Luxury',
+    duration: '3:00',
+    url: 'https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3',
+    icon: (
+      <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+    )
+  }
+];
 
 interface ProjectCardProps {
   p: SavedProject;
@@ -172,7 +212,6 @@ const Toast: React.FC<{ message: string, type: 'error' | 'success', onClose: () 
 };
 
 // --- DATA: LABS & TOOLS ---
-
 const LABS_DATA: LabCategory[] = [
   {
     id: 'av_labs',
@@ -199,6 +238,30 @@ const LABS_DATA: LabCategory[] = [
     ]
   },
   {
+    id: 'pixel_labs',
+    title: 'Pixel Labs',
+    description: 'Advanced image generation and editing.',
+    color: 'from-pink-500 to-rose-500',
+    tools: [
+      {
+        id: 'product_image',
+        title: 'Link to Product Image',
+        description: 'Generate 4 stunning professional product photography shots from a URL.',
+        tags: ['New'],
+        icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>,
+        route: 'tool:pixel-product-image'
+      },
+      {
+        id: 'product_model',
+        title: 'Link to Product Model',
+        description: 'Visualize your product on AI models. 4 variations based on product knowledge.',
+        tags: ['New'],
+        icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>,
+        route: 'tool:pixel-product-model'
+      }
+    ]
+  },
+  {
     id: 'script_labs',
     title: 'Script Labs',
     description: 'AI-powered copywriting and screenwriting.',
@@ -210,22 +273,6 @@ const LABS_DATA: LabCategory[] = [
         description: 'Generate high-conversion ad copy for FB, IG, and Google.',
         tags: ['Coming Soon'],
         icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>,
-        disabled: true
-      }
-    ]
-  },
-  {
-    id: 'pixel_labs',
-    title: 'Pixel Labs',
-    description: 'Advanced image generation and editing.',
-    color: 'from-pink-500 to-rose-500',
-    tools: [
-      {
-        id: 'product_shoot',
-        title: 'Virtual Product Shoot',
-        description: 'Place your product in any environment without a camera.',
-        tags: ['Coming Soon'],
-        icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>,
         disabled: true
       }
     ]
@@ -277,7 +324,7 @@ const MOCK_GALLERY: GalleryItem[] = [
     title: 'Tech Gadget 3D Render',
     author: 'FutureVis',
     labId: 'pixel_labs',
-    type: 'Virtual Product Shoot',
+    type: 'Link to Product Image',
     thumbnailUrl: 'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=600&q=80',
     likes: 532,
     views: 4500,
@@ -310,7 +357,7 @@ const MOCK_GALLERY: GalleryItem[] = [
     title: 'Neon Energy Drink',
     author: 'CyberPunkAds',
     labId: 'pixel_labs',
-    type: 'Virtual Product Shoot',
+    type: 'Link to Product Image',
     thumbnailUrl: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=600&q=80',
     likes: 842,
     views: 10500,
@@ -359,6 +406,11 @@ const LinkToVideoTool: React.FC<{
   const [script, setScript] = useState<string>('');
   const [audioBase64, setAudioBase64] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  
+  // Editor State
+  const [bgmBlob, setBgmBlob] = useState<Blob | null>(null);
+  const [bgmName, setBgmName] = useState<string | null>(null);
+  const [bgmPreviewUrl, setBgmPreviewUrl] = useState<string | null>(null); // For playing selected stock/upload
 
   const t = TRANSLATIONS[language];
 
@@ -419,7 +471,6 @@ const LinkToVideoTool: React.FC<{
      setIsLoading(true);
      setError(null);
      try {
-        // Wait, generateVeoVideo takes (imageBase64, mimeType, promptDetails).
         const details = `${productData?.name}, ${productData?.visualFeatures}`;
         const vUrl = await generateVeoVideo(generatedModel.rawBase64, generatedModel.mimeType, details);
         setVideoUrl(vUrl);
@@ -441,6 +492,54 @@ const LinkToVideoTool: React.FC<{
     } finally {
         setIsLoading(false);
     }
+  };
+
+  // Music Handling
+  const handleBgmUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+       const file = e.target.files[0];
+       setBgmBlob(file);
+       setBgmName(file.name);
+       // Create preview URL
+       if (bgmPreviewUrl) URL.revokeObjectURL(bgmPreviewUrl);
+       setBgmPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleStockBgmSelect = async (stock: typeof STOCK_MUSIC[0]) => {
+    setIsLoading(true);
+    try {
+      // For playing in UI
+      if (bgmPreviewUrl) URL.revokeObjectURL(bgmPreviewUrl);
+      
+      // For final mix, we need a Blob
+      const response = await fetch(stock.url);
+      const blob = await response.blob();
+      
+      setBgmBlob(blob);
+      setBgmName(stock.title);
+      setBgmPreviewUrl(stock.url);
+      
+    } catch (e) {
+      console.error("Failed to load stock music", e);
+      setError("Failed to load music. Please try another or upload your own.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const togglePreview = () => {
+      if(!audioRef.current || !bgmPreviewUrl) return;
+      if(isPlayingPreview) {
+          audioRef.current.pause();
+          setIsPlayingPreview(false);
+      } else {
+          audioRef.current.play();
+          setIsPlayingPreview(true);
+      }
   };
 
   return (
@@ -607,7 +706,7 @@ const LinkToVideoTool: React.FC<{
                         )}
                     </div>
                     
-                    {/* Right: Script & Audio */}
+                    {/* Right: Script & Audio & Editor */}
                     <div className="flex flex-col h-full">
                         <div className="mb-6">
                             <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">Commercial Script</h3>
@@ -649,15 +748,94 @@ const LinkToVideoTool: React.FC<{
                             </div>
                         </div>
 
+                        {/* --- FINAL EDITOR: BGM SELECTION --- */}
+                        {step === Step.FINAL_EDITOR && (
+                          <div className="mb-6 pt-6 border-t border-[#2E3033] animate-fade-in">
+                             <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">{t.bgm_select}</h3>
+                             
+                             {/* Stock Music Grid */}
+                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                                {STOCK_MUSIC.map((track) => {
+                                  const isSelected = bgmName === track.title;
+                                  const isPlaying = isPlayingPreview && bgmPreviewUrl === track.url;
+                                  
+                                  return (
+                                    <div 
+                                      key={track.id} 
+                                      onClick={() => handleStockBgmSelect(track)}
+                                      className={`
+                                        relative p-3 rounded-lg border cursor-pointer transition-all
+                                        ${isSelected 
+                                          ? 'bg-indigo-500/10 border-indigo-500' 
+                                          : 'bg-[#252628] border-[#3E4044] hover:border-gray-500'}
+                                      `}
+                                    >
+                                       <div className="flex items-center justify-between mb-2">
+                                          {track.icon}
+                                          {isSelected && <div className="w-2 h-2 rounded-full bg-indigo-500"></div>}
+                                       </div>
+                                       <div className="text-xs font-medium text-white truncate">{track.title}</div>
+                                       <div className="text-[10px] text-gray-500">{track.genre} • {track.duration}</div>
+                                    </div>
+                                  );
+                                })}
+                             </div>
+
+                             {/* Upload or Preview */}
+                             <div className="flex items-center gap-3 bg-[#1C1D1F] p-3 rounded-lg border border-[#2E3033]">
+                                {bgmPreviewUrl ? (
+                                    <div className="flex-1 flex items-center justify-between">
+                                        <div className="flex items-center gap-3 overflow-hidden">
+                                           <button 
+                                              onClick={togglePreview}
+                                              className="w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center hover:bg-indigo-400"
+                                           >
+                                              {isPlayingPreview ? (
+                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                                              ) : (
+                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+                                              )}
+                                           </button>
+                                           <div className="flex flex-col min-w-0">
+                                              <span className="text-xs font-medium text-white truncate">{bgmName}</span>
+                                              <span className="text-[10px] text-indigo-400">Selected</span>
+                                           </div>
+                                        </div>
+                                        <audio ref={audioRef} src={bgmPreviewUrl || ''} onEnded={() => setIsPlayingPreview(false)} className="hidden" />
+                                        
+                                        <div className="relative">
+                                            <input type="file" accept="audio/*" onChange={handleBgmUpload} className="absolute inset-0 opacity-0 cursor-pointer w-full" />
+                                            <button className="text-xs text-gray-400 hover:text-white underline">{t.or_upload}</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="w-full relative border-dashed border border-gray-600 rounded-lg p-3 text-center hover:bg-[#252628] transition-colors cursor-pointer">
+                                        <input type="file" accept="audio/*" onChange={handleBgmUpload} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+                                        <span className="text-xs text-gray-400 flex items-center justify-center gap-2">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                                            {t.bgm_upload}
+                                        </span>
+                                    </div>
+                                )}
+                             </div>
+                          </div>
+                        )}
+
                         {videoUrl && audioBase64 && (
                             <div className="mt-auto pt-6 border-t border-[#2E3033]">
-                                <div className="p-4 bg-green-900/10 border border-green-500/20 rounded-lg text-center">
-                                    <h4 className="text-green-400 font-medium mb-1">Assets Ready!</h4>
-                                    <p className="text-xs text-gray-400 mb-4">Video and Audio have been generated successfully.</p>
-                                    <Button className="w-full">
-                                        Go to Final Editor
-                                    </Button>
-                                </div>
+                                {step !== Step.FINAL_EDITOR ? (
+                                  <div className="p-4 bg-green-900/10 border border-green-500/20 rounded-lg text-center">
+                                      <h4 className="text-green-400 font-medium mb-1">Assets Ready!</h4>
+                                      <p className="text-xs text-gray-400 mb-4">Video and Audio have been generated successfully.</p>
+                                      <Button onClick={() => advanceStep(Step.FINAL_EDITOR)} className="w-full">
+                                          Go to Final Editor
+                                      </Button>
+                                  </div>
+                                ) : (
+                                  <Button className="w-full" disabled={!bgmBlob && !bgmName} variant={bgmBlob ? 'primary' : 'secondary'}>
+                                      {bgmBlob ? 'Render Final Video' : 'Select Music to Continue'}
+                                  </Button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -667,6 +845,146 @@ const LinkToVideoTool: React.FC<{
        </main>
     </div>
   );
+};
+
+
+// --- COMPONENT: PixelLabsTool (New Feature) ---
+const PixelLabsTool: React.FC<{ 
+  mode: 'product' | 'model',
+  onBack: () => void, 
+  language: Language,
+  setLanguage: (l: Language) => void
+}> = ({ mode, onBack, language, setLanguage }) => {
+    const [step, setStep] = useState<number>(1);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [url, setUrl] = useState('');
+    const [productData, setProductData] = useState<ProductData | null>(null);
+    const [generatedImages, setGeneratedImages] = useState<GeneratedModel[]>([]);
+
+    const title = mode === 'product' ? 'Link to Product Image' : 'Link to Product Model';
+
+    const handleAnalyze = async () => {
+        if (!url) return;
+        setIsLoading(true);
+        setError(null);
+        try {
+            const data = await analyzeProductUrl(url, language);
+            setProductData(data);
+            
+            // Auto proceed to generation
+            setIsLoading(true); // Keep loading
+            const images = await generatePixelBatch(data, mode);
+            setGeneratedImages(images);
+            setStep(2);
+        } catch (e: any) {
+            setError(e.message || "Operation failed");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDownload = (base64: string, filename: string) => {
+        const link = document.createElement("a");
+        // base64 already has mime type prefix from service
+        link.href = base64; 
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    return (
+        <div className="min-h-screen bg-[#050505] text-[#E8E8E8] flex flex-col">
+            <header className="border-b border-[#2E3033] bg-[#08090A] px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+                <div className="flex items-center gap-4">
+                    <button onClick={onBack} className="p-2 hover:bg-[#1C1D1F] rounded-full transition-colors">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    </button>
+                    <h1 className="text-lg font-semibold text-white">{title}</h1>
+                </div>
+            </header>
+
+            <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-12">
+                {step === 1 && (
+                    <div className="max-w-xl mx-auto py-10 text-center animate-fade-in">
+                         <div className="mb-8">
+                            <div className="w-16 h-16 bg-[#252628] rounded-full flex items-center justify-center mx-auto mb-4 border border-[#3E4044]">
+                               {mode === 'product' ? (
+                                 <svg className="w-8 h-8 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                               ) : (
+                                 <svg className="w-8 h-8 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                               )}
+                            </div>
+                            <h2 className="text-2xl font-bold text-white mb-2">Generate {mode === 'product' ? 'Product Shots' : 'Model Shots'}</h2>
+                            <p className="text-gray-400">Enter your product URL to automatically generate 4 professional variations.</p>
+                        </div>
+                        
+                        <div className="flex gap-2 mb-6">
+                           <input 
+                             type="text" 
+                             value={url}
+                             onChange={(e) => setUrl(e.target.value)}
+                             placeholder="https://store.com/product/xyz"
+                             className="flex-1 bg-[#08090A] border border-[#2E3033] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-all"
+                           />
+                           <Button onClick={handleAnalyze} isLoading={isLoading} disabled={!url} className="px-6">
+                              Generate
+                           </Button>
+                        </div>
+                        
+                        {isLoading && (
+                            <div className="flex flex-col items-center justify-center p-8 text-gray-400 animate-pulse">
+                                <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                                <p>Analyzing product content & generating images...</p>
+                                <p className="text-xs mt-2">This may take up to 30 seconds.</p>
+                            </div>
+                        )}
+                        
+                        {error && (
+                            <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-200 text-sm">
+                                {error}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {step === 2 && (
+                    <div className="animate-fade-in">
+                        <div className="flex justify-between items-center mb-6">
+                            <div>
+                                <h2 className="text-xl font-bold text-white">{productData?.name}</h2>
+                                <p className="text-sm text-gray-400">Generated 4 variations based on product analysis.</p>
+                            </div>
+                            <Button onClick={() => setStep(1)} variant="secondary" className="text-sm">
+                                Start Over
+                            </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {generatedImages.map((img, idx) => (
+                                <div key={idx} className="bg-[#1C1D1F] border border-[#2E3033] rounded-xl overflow-hidden group">
+                                    <div className="aspect-[4/5] relative bg-black">
+                                        <img src={img.imageUrl} alt={`Variation ${idx}`} className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <Button onClick={() => handleDownload(img.imageUrl, `${mode}_shot_${idx+1}.png`)}>
+                                                Download
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="p-3">
+                                        <p className="text-xs text-gray-500 line-clamp-2" title={img.promptUsed}>
+                                            {img.promptUsed.split('Style:')[1] || img.promptUsed}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </main>
+        </div>
+    );
 };
 
 
@@ -795,122 +1113,6 @@ const NeuralBackground: React.FC = () => {
 };
 
 
-// --- LOGIN MODAL (Option A) ---
-const LoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: (user: any) => void }> = ({ isOpen, onClose, onLogin }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // -- GOOGLE LOGIN HOOK --
-  const googleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            // Send the Access Token to backend for verification & user creation
-            const data = await backendApi.loginWithGoogle(tokenResponse.access_token);
-            onLogin(data.user);
-        } catch (e: any) {
-            console.error("Google Login Error", e);
-            setError("Google sign-in failed. Please try again.");
-        } finally {
-            setIsLoading(false);
-        }
-    },
-    onError: () => {
-        setError("Google Popup failed.");
-    }
-  });
-
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    try {
-        const data = await backendApi.login(email, password);
-        onLogin(data.user);
-    } catch(e: any) {
-        setError("Invalid email or password");
-    } finally {
-        setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
-      <div className="relative bg-[#1C1D1F] border border-[#2E3033] rounded-2xl w-full max-w-md p-8 shadow-2xl animate-fade-in-up">
-         <h2 className="text-2xl font-bold text-white mb-2 text-center">Welcome Back</h2>
-         <p className="text-gray-400 text-center mb-8">Sign in to continue creating with AI.</p>
-         
-         {error && (
-             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-200 text-sm rounded text-center">
-                 {error}
-             </div>
-         )}
-         
-         {/* Google Login Button */}
-         <button 
-            onClick={() => googleLogin()}
-            disabled={isLoading}
-            className="w-full mb-6 flex items-center justify-center gap-3 bg-white text-gray-900 font-medium py-3 rounded-lg hover:bg-gray-100 transition-colors"
-         >
-            <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.26.81-.58z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-            Sign in with Google
-         </button>
-
-         <div className="relative mb-6">
-            <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[#2E3033]"></div>
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-[#1C1D1F] px-2 text-gray-500">Or continue with email</span>
-            </div>
-         </div>
-
-         <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-               <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Email</label>
-               <input 
-                 type="email" 
-                 required
-                 value={email}
-                 onChange={e => setEmail(e.target.value)}
-                 className="w-full bg-[#08090A] border border-[#2E3033] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-all"
-                 placeholder="you@company.com"
-               />
-            </div>
-            <div>
-               <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Password</label>
-               <input 
-                 type="password" 
-                 required
-                 value={password}
-                 onChange={e => setPassword(e.target.value)}
-                 className="w-full bg-[#08090A] border border-[#2E3033] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-all"
-                 placeholder="••••••••"
-               />
-            </div>
-            
-            <div className="pt-4">
-               <Button type="submit" isLoading={isLoading} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 border-none text-white shadow-lg shadow-indigo-500/20">
-                  Sign In
-               </Button>
-            </div>
-         </form>
-         
-         <div className="mt-6 text-center text-xs text-gray-500">
-            Don't have an account? <a href="#" className="text-indigo-400 hover:text-indigo-300">Contact Sales</a>
-         </div>
-      </div>
-    </div>
-  );
-};
-
-
 // --- LANDING SHOWCASE ---
 const LandingShowcase: React.FC = () => {
     return (
@@ -934,7 +1136,7 @@ const LandingShowcase: React.FC = () => {
 };
 
 
-const LandingPage: React.FC<{ onOpenLogin: () => void }> = ({ onOpenLogin }) => {
+const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => {
   const showcaseRef = useRef<HTMLDivElement>(null);
 
   const scrollToShowcase = () => {
@@ -998,12 +1200,7 @@ const LandingPage: React.FC<{ onOpenLogin: () => void }> = ({ onOpenLogin }) => 
          </div>
          <div className="hidden md:flex gap-8 text-sm font-medium text-gray-300">
             <a href="#" className="hover:text-white transition-all hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">Solutions</a>
-            <button onClick={scrollToShowcase} className="hover:text-white transition-all hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">Showcase</button>
-            <a href="#" className="hover:text-white transition-all hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">Pricing</a>
          </div>
-         <button onClick={onOpenLogin} className="px-6 py-2.5 text-sm font-medium bg-white/10 hover:bg-white/20 border border-white/10 backdrop-blur-md text-white rounded-full transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.2)]">
-            Login
-         </button>
       </nav>
 
       <div className="relative z-10 max-w-5xl mx-auto text-center pt-32 pb-20 px-6">
@@ -1034,14 +1231,11 @@ const LandingPage: React.FC<{ onOpenLogin: () => void }> = ({ onOpenLogin }) => 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 animate-fade-in-up delay-300">
              <button 
-                onClick={onOpenLogin}
+                onClick={onStart}
                 className="group relative flex items-center gap-3 px-8 py-4 bg-white text-black rounded-xl font-bold transition-all hover:scale-105 shadow-[0_0_40px_rgba(255,255,255,0.3)] overflow-hidden"
              >
                 <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 opacity-0 group-hover:opacity-10 transition-opacity"></div>
                 Get Started
-             </button>
-             <button onClick={scrollToShowcase} className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-medium transition-all backdrop-blur-sm">
-                View Showcase
              </button>
           </div>
       </div>
@@ -1254,6 +1448,9 @@ const Dashboard: React.FC<{
                                      {tool.tags.includes('Coming Soon') && (
                                          <span className="px-2 py-0.5 text-[10px] font-medium bg-[#252628] text-gray-400 rounded-full border border-[#3E4044]">Soon</span>
                                      )}
+                                     {tool.tags.includes('New') && (
+                                         <span className="px-2 py-0.5 text-[10px] font-medium bg-indigo-500/20 text-indigo-300 rounded-full border border-indigo-500/30">New</span>
+                                     )}
                                   </div>
                                   
                                   <h3 className="text-lg font-medium text-white mb-2 group-hover:text-indigo-300 transition-colors">{tool.title}</h3>
@@ -1301,6 +1498,24 @@ const App: React.FC = () => {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
+  // Direct Access (Bypass Login)
+  const handleDirectStart = () => {
+    // Mock user for direct access
+    const mockUser = {
+      name: 'Guest User',
+      email: 'guest@contentlabs.ai',
+      plan: 'Trial',
+      picture: ''
+    };
+    
+    // Set a dummy token so backend api calls pass the auth check (if they check for presence of header)
+    localStorage.setItem('auth_token', 'guest-token-123');
+    
+    setUser(mockUser);
+    setCurrentRoute('dashboard');
+    addToast('Welcome to ContentLabs!', 'success');
+  };
+
   const handleLogin = (userData: any) => {
     setUser(userData);
     setCurrentRoute('dashboard');
@@ -1310,19 +1525,23 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
      setUser(null);
+     localStorage.removeItem('auth_token');
      setCurrentRoute('landing');
   };
 
   return (
     <>
+      {/* Login Modal disabled for now based on request */}
+      {/* 
       <LoginModal 
          isOpen={isLoginModalOpen} 
          onClose={() => setIsLoginModalOpen(false)} 
          onLogin={handleLogin} 
-      />
+      /> 
+      */}
 
       {currentRoute === 'landing' && (
-         <LandingPage onOpenLogin={() => setIsLoginModalOpen(true)} />
+         <LandingPage onStart={handleDirectStart} />
       )}
       
       {(currentRoute === 'dashboard' || currentRoute === 'gallery' || currentRoute === 'profile') && (
@@ -1336,6 +1555,24 @@ const App: React.FC = () => {
       
       {currentRoute === 'tool:link-to-video' && (
         <LinkToVideoTool 
+           onBack={() => setCurrentRoute('dashboard')} 
+           language={language}
+           setLanguage={setLanguage}
+        />
+      )}
+
+      {currentRoute === 'tool:pixel-product-image' && (
+        <PixelLabsTool 
+           mode="product"
+           onBack={() => setCurrentRoute('dashboard')} 
+           language={language}
+           setLanguage={setLanguage}
+        />
+      )}
+
+      {currentRoute === 'tool:pixel-product-model' && (
+        <PixelLabsTool 
+           mode="model"
            onBack={() => setCurrentRoute('dashboard')} 
            language={language}
            setLanguage={setLanguage}

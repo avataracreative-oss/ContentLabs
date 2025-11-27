@@ -1,7 +1,13 @@
+
 // This service communicates with our Node.js Backend (server.js)
 // instead of talking directly to Google Gemini.
 
-const BACKEND_URL = 'http://localhost:3001/api'; // Adjust if deployed
+// CRITICAL FIX: Use the Environment Variable for the Backend URL with optional chaining.
+// In Project IDX, this must be the HTTPS URL of your server (port 3001).
+// If not set or env is undefined, it falls back to localhost (which causes errors in HTTPS previews).
+const BACKEND_URL = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001/api';
+
+console.log("Connecting to Backend at:", BACKEND_URL);
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('auth_token');
@@ -33,13 +39,21 @@ export const backendApi = {
   },
 
   analyzeProduct: async (url, lang) => {
-    const res = await fetch(`${BACKEND_URL}/generate/analyze`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ url, lang })
-    });
-    if (!res.ok) throw new Error('Backend analysis failed');
-    return res.json();
+    try {
+      const res = await fetch(`${BACKEND_URL}/generate/analyze`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ url, lang })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Backend analysis failed');
+      }
+      return res.json();
+    } catch (e) {
+      console.error("API Error:", e);
+      throw new Error("Failed to connect to server. Ensure Backend is running and VITE_BACKEND_URL is set in .env");
+    }
   },
 
   generateImage: async (prompt) => {

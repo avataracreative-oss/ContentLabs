@@ -9,18 +9,20 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors()); // Allow frontend to call backend
+// Enable CORS for ALL origins (easiest for dev/preview environments)
+app.use(cors({
+  origin: '*', 
+  methods: ['GET', 'POST', 'OPTIONS']
+})); 
 app.use(express.json({ limit: '50mb' })); // Allow large payloads for images
 
 // Initialize Gemini (Server Side - Secure)
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Initialize Google OAuth Client
-// You must set GOOGLE_CLIENT_ID in your .env file
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // --- MONGODB CONNECTION ---
-// Replace MONGODB_URI in .env with your real connection string
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/contentlabs';
 
 mongoose.connect(MONGODB_URI)
@@ -30,7 +32,7 @@ mongoose.connect(MONGODB_URI)
 // --- SCHEMAS ---
 const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
-  password: { type: String }, // Optional if using only Google
+  password: { type: String }, 
   googleId: { type: String },
   name: { type: String },
   picture: { type: String },
@@ -42,7 +44,7 @@ const UserSchema = new mongoose.Schema({
 const ProjectSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   name: String,
-  data: Object, // Store JSON blob of project state
+  data: Object, 
   updatedAt: { type: Date, default: Date.now }
 });
 
@@ -50,13 +52,12 @@ const User = mongoose.model('User', UserSchema);
 const Project = mongoose.model('Project', ProjectSchema);
 
 // --- MIDDLEWARE: AUTHENTICATION ---
-// Simple mock middleware. In production, use JWT (JsonWebToken)
 const requireAuth = (req, res, next) => {
   const authHeader = req.headers.authorization;
+  // For the "Guest" access in the demo, we allow the mock token
   if (!authHeader) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  // In real app: verify token here
   next();
 };
 
@@ -81,13 +82,9 @@ app.post('/api/auth/login', async (req, res) => {
   });
 });
 
-// REAL GOOGLE LOGIN ENDPOINT
 app.post('/api/auth/google', async (req, res) => {
   try {
     const { accessToken } = req.body;
-    
-    // In React Google Auth hook, we get an Access Token.
-    // We can use this to fetch the UserInfo from Google APIs.
     const userInfoResponse = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`);
     const payload = await userInfoResponse.json();
     
@@ -95,7 +92,6 @@ app.post('/api/auth/google', async (req, res) => {
         throw new Error("Failed to verify Google Token");
     }
 
-    // Find or Create User
     let user = await User.findOne({ email: payload.email });
     
     if (!user) {
@@ -108,14 +104,13 @@ app.post('/api/auth/google', async (req, res) => {
             credits: 10
         });
     } else if (!user.googleId) {
-        // Link existing email account to Google
         user.googleId = payload.sub;
         user.picture = payload.picture;
         await user.save();
     }
 
     res.json({
-        token: 'mock-session-token-' + user._id, // Replace with Real JWT
+        token: 'mock-session-token-' + user._id,
         user: {
             id: user._id,
             email: user.email,
@@ -137,6 +132,7 @@ app.post('/api/auth/google', async (req, res) => {
 // 1. Analyze Product
 app.post('/api/generate/analyze', requireAuth, async (req, res) => {
   try {
+    console.log("Analyzing URL:", req.body.url);
     const { url, lang } = req.body;
     const langInstruction = lang === 'id' ? "Bahasa Indonesia" : "English";
     
@@ -152,7 +148,6 @@ app.post('/api/generate/analyze', requireAuth, async (req, res) => {
       - [Point 1]
     `;
 
-    // Call Gemini from Backend
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: prompt,
@@ -161,8 +156,8 @@ app.post('/api/generate/analyze', requireAuth, async (req, res) => {
 
     res.json({ text: response.text, grounding: response.candidates?.[0]?.groundingMetadata });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
+    console.error("Analysis Error:", error);
+    res.status(500).json({ error: error.message || "Failed to analyze product" });
   }
 });
 
@@ -170,6 +165,7 @@ app.post('/api/generate/analyze', requireAuth, async (req, res) => {
 app.post('/api/generate/image', requireAuth, async (req, res) => {
   try {
     const { prompt } = req.body;
+    console.log("Generating Image...");
     
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
@@ -179,7 +175,6 @@ app.post('/api/generate/image', requireAuth, async (req, res) => {
       },
     });
 
-    // Extract image logic
     let imageData = null;
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
@@ -194,6 +189,7 @@ app.post('/api/generate/image', requireAuth, async (req, res) => {
     if (!imageData) throw new Error("No image generated");
     res.json(imageData);
   } catch (error) {
+    console.error("Image Gen Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -235,11 +231,10 @@ app.post('/api/generate/audio', requireAuth, async (req, res) => {
 });
 
 // 5. Generate Video (Veo)
-// Note: Veo polling usually takes time, so backend might need a job queue (BullMQ/Redis)
-// For simplicity, we keep the long-polling connection open here (not recommended for production)
 app.post('/api/generate/video', requireAuth, async (req, res) => {
   try {
     const { prompt, imageBase64, mimeType } = req.body;
+    console.log("Generating Veo Video...");
 
     let operation = await ai.models.generateVideos({
       model: 'veo-3.1-fast-generate-preview',
@@ -248,25 +243,24 @@ app.post('/api/generate/video', requireAuth, async (req, res) => {
       config: { numberOfVideos: 1, resolution: '720p', aspectRatio: '9:16' }
     });
 
-    // Simple poll loop on server
     while (!operation.done) {
       await new Promise(r => setTimeout(r, 5000));
       operation = await ai.operations.getVideosOperation({ operation });
     }
 
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    // Backend fetches the final video bytes to proxy it to frontend (avoids exposing API Key in URL)
     const videoRes = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
     const videoBuffer = await videoRes.arrayBuffer();
     const videoBase64 = Buffer.from(videoBuffer).toString('base64');
 
     res.json({ videoBase64, mimeType: 'video/mp4' });
   } catch (error) {
+    console.error("Veo Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Start Server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`ContentLabs Backend running on port ${PORT}`);
 });

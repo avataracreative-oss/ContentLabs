@@ -185,6 +185,85 @@ export const generateModelImage = async (product: ProductData, gender: 'male' | 
 };
 
 /**
+ * Generate a batch of images for Pixel Labs
+ * @param product Product Data
+ * @param mode 'product' for product display, 'model' for model shoot
+ */
+export const generatePixelBatch = async (product: ProductData, mode: 'product' | 'model'): Promise<GeneratedModel[]> => {
+  
+  const basePrompt = `Professional commercial photography of ${product.name}, described as: ${product.visualFeatures}.`;
+  
+  // Create 4 distinct style prompts based on mode
+  let variations: string[] = [];
+
+  if (mode === 'product') {
+     variations = [
+        "Style: Clean Studio Shot. Minimalist, solid soft pastel background, professional studio lighting, 4k.",
+        "Style: Lifestyle Context. Placed on a wooden table or natural environment suitable for the product, sunlit, depth of field.",
+        "Style: Creative Advertising. Floating elements, dramatic neon or colored lighting, high contrast, dynamic composition.",
+        "Style: Close-up Macro. Focusing on texture and details, high key lighting, very sharp."
+     ];
+  } else {
+     // Model Mode
+     variations = [
+        "Subject: Professional Indonesian Female Model. Holding/Using the product. Style: Fashion Editorial, trendy outfit, urban background.",
+        "Subject: Professional Indonesian Male Model. Holding/Using the product. Style: Casual Lifestyle, natural lighting, blurred home background.",
+        "Subject: Model (gender neutral/appropriate). Close up on hands interacting with the product. Style: Clean Studio, focus on utility.",
+        "Subject: Group of friends or social setting (Indonesian). Product visible in the scene. Style: Candid, warm, happy vibe."
+     ];
+  }
+
+  // Execute requests in parallel (or sequentially if worried about rate limits, but parallel is better for UX)
+  const promises = variations.map(async (variant) => {
+      const fullPrompt = `${basePrompt} ${variant} High resolution, photorealistic, 8k.`;
+      
+      try {
+        if (USE_BACKEND) {
+            const res = await retry(() => backendApi.generateImage(fullPrompt));
+            return {
+                imageUrl: `data:${res.mimeType};base64,${res.rawBase64}`,
+                rawBase64: res.rawBase64,
+                mimeType: res.mimeType,
+                promptUsed: fullPrompt
+            };
+        } else {
+             // Direct Mode fallback
+            const ai = getAiClient();
+            const response = await retry<GenerateContentResponse>(() => ai.models.generateContent({
+                model: 'gemini-3-pro-image-preview',
+                contents: { parts: [{ text: fullPrompt }] },
+                config: { imageConfig: { aspectRatio: "4:5", imageSize: "1K" } }, // 4:5 better for social post
+            }));
+            
+            let rawBase64 = "";
+            let mimeType = "";
+            for (const part of response.candidates?.[0]?.content?.parts || []) {
+                if (part.inlineData) {
+                    rawBase64 = part.inlineData.data;
+                    mimeType = part.inlineData.mimeType;
+                    break;
+                }
+            }
+            if(!rawBase64) throw new Error("No data");
+            return {
+                imageUrl: `data:${mimeType};base64,${rawBase64}`,
+                rawBase64,
+                mimeType,
+                promptUsed: fullPrompt
+            }
+        }
+      } catch (e) {
+          console.error("Single image gen failed", e);
+          return null; 
+      }
+  });
+
+  const results = await Promise.all(promises);
+  return results.filter((r): r is GeneratedModel => r !== null);
+};
+
+
+/**
  * Step 3: Generate Commercial Script
  */
 export const generateScript = async (product: ProductData, gender: string, lang: Language, style: 'short' | 'normal' = 'short'): Promise<string> => {
